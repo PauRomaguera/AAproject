@@ -1,0 +1,79 @@
+---- 2048*2048 ----
+
+· eric@debian:~/Documents/AA/AAproject$ perf stat -e cache-references,cache-misses ./schurInv ·
+Checksum A:2.006182
+ Performance counter stats for './schurInv':
+
+    26,008,388,191      cache-references                                                   
+    16,332,285,734      cache-misses                     #   62.796 % of all cache refs    
+
+     113.818400649 seconds time elapsed
+
+     113.698361000 seconds user
+       0.115998000 seconds sys
+
+
+· eric@debian:~/Documents/AA/AAproject$ perf stat -e cache-references,cache-misses ./base4x4 ·
+Matrix size: 2048x2048
+
+Checksum: 2.00618193
+
+ Performance counter stats for './base4x4':
+
+     6,607,986,593      cache-references                                                   
+        70,496,204      cache-misses                     #    1.067 % of all cache refs    
+
+      16.385526720 seconds time elapsed
+
+      16.368302000 seconds user
+       0.016000000 seconds sys
+
+
+· eric@debian:~/Documents/AA/AAproject$ perf stat ./base4x4 ·
+Matrix size: 2048x2048
+
+Checksum: 2.00618193
+
+ Performance counter stats for './base4x4':
+
+         16,222.77 msec task-clock                       #    1.000 CPUs utilized          
+                16      context-switches                 #    0.986 /sec                   
+                 0      cpu-migrations                   #    0.000 /sec                   
+             1,114      page-faults                      #   68.669 /sec                   
+    70,109,720,496      cycles                           #    4.322 GHz                      (83.33%)
+    31,656,952,600      stalled-cycles-frontend          #   45.15% frontend cycles idle     (83.33%)
+    30,098,154,914      stalled-cycles-backend           #   42.93% backend cycles idle      (83.33%)
+    26,137,776,337      instructions                     #    0.37  insn per cycle         
+                                                  #    1.21  stalled cycles per insn  (83.33%)
+     4,382,210,043      branches                         #  270.127 M/sec                    (83.33%)
+         9,561,049      branch-misses                    #    0.22% of all branches          (83.34%)
+
+      16.224302179 seconds time elapsed
+
+      16.200142000 seconds user
+       0.024000000 seconds sys
+
+
+· eric@debian:~/Documents/AA/AAproject$ perf stat ./schurInv ·
+Checksum A:2.006182
+ Performance counter stats for './schurInv':
+
+        101,826.31 msec task-clock                       #    1.000 CPUs utilized          
+               235      context-switches                 #    2.308 /sec                   
+                10      cpu-migrations                   #    0.098 /sec                   
+            29,181      page-faults                      #  286.576 /sec                   
+   436,540,601,543      cycles                           #    4.287 GHz                      (83.33%)
+       977,481,472      stalled-cycles-frontend          #    0.22% frontend cycles idle     (83.33%)
+   413,412,880,033      stalled-cycles-backend           #   94.70% backend cycles idle      (83.34%)
+    40,503,682,960      instructions                     #    0.09  insn per cycle         
+                                                  #   10.21  stalled cycles per insn  (83.33%)
+     3,814,471,100      branches                         #   37.461 M/sec                    (83.34%)
+        35,516,150      branch-misses                    #    0.93% of all branches          (83.33%)
+
+     101.843155473 seconds time elapsed
+
+     101.711236000 seconds user
+       0.115990000 seconds sys
+
+
+
