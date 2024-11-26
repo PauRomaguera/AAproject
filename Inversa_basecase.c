@@ -4,7 +4,7 @@
 #define REAL double
 #define N 1500
 
-
+ 
 int main() 
 {
   printf("Matrix size: %dx%d\n", N, N);

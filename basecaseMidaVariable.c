@@ -2,11 +2,15 @@
 #include <stdlib.h>
 
 #define REAL double
-#define N 2048
 
 
-int main() 
+int main(int argc, char *argv[])
 {
+  if (argc != 2) {
+      printf("Usage: %s <matrix_size>\n", argv[0]);
+      return 1;
+  }
+  int N = atoi(argv[1]);
   printf("Matrix size: %dx%d\n", N, N);
 
   REAL *input = (REAL *)malloc(N * N * sizeof(REAL));

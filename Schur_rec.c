@@ -31,12 +31,78 @@ void print_matrix(double *A, int n) {
     printf("\n");
 }
 
+void inverse_2x2(double *A, double *A_inv) {
+    double a = A[0];
+    double b = A[1];
+    double c = A[2];
+    double d = A[3];
+    
+    // Compute determinant
+    double det = a * d - b * c;
+    if (det == 0) {
+        fprintf(stderr, "Matrix is singular and cannot be inverted.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Compute the inverse
+    A_inv[0] =  d / det; // A_inv[0][0]
+    A_inv[1] = -b / det; // A_inv[0][1]
+    A_inv[2] = -c / det; // A_inv[1][0]
+    A_inv[3] =  a / det; // A_inv[1][1]
+}
+
+
+void GJElimination(double *input, double *inverse, int N) {
+//  double *inverse = (double *)malloc(N * N * sizeof(double));
+  double pivot, pivot2, sum;
+  int i, j, k;
+
+
+  // initializes identity matrix
+  for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++)
+      if (i == j)
+        inverse[i*N+j] = 1.0f;
+      else
+        inverse[i*N+j] = 0.0f;
+
+
+  // computes the inverse matrix
+  for (i = 0; i < N; i++)
+  {
+    pivot = input[i*N+i];
+    for (j = 0; j < N; j++)
+    {
+      input[i*N+j] /= pivot;
+      inverse[i*N+j] /= pivot;
+    }
+    for (j = 0; j < N; j++)
+      if (i != j)
+      {
+        pivot2 = input[j*N+i];
+        for (k = 0; k < N; k++)
+          input[j * N + k] -= input[i * N + k] * pivot2;
+        for (k = 0; k < N; k++)
+          inverse[j * N + k] -= inverse[i * N + k] * pivot2;
+      }
+  }
+  //return inverse;
+}
+
 // Recursive function to invert a matrix using the Schur complement
-void schur_inverse(double *A, double *A_inv, int n) {
-    if (n == 1) {
-        // Base case: inverse of 1x1 matrix
-        A_inv[0] = 1 / A[0];
-        return;
+void schur_inverse(double *A, double *A_inv, int n, int base_case_size) {
+    if (n <= base_case_size) {
+        if (n == 1) {
+            // Base case: inverse of 1x1 matrix
+            A_inv[0] = 1 / A[0];
+            return;
+        }
+	if (n == 2) {
+	    inverse_2x2(A, A_inv);
+	    return;
+	}
+	GJElimination(A, A_inv, n);
+	return;
     }
 
     int half = n / 2;
@@ -69,9 +135,20 @@ void schur_inverse(double *A, double *A_inv, int n) {
     print_matrix(A21, half);
     printf("A22:\n");
     print_matrix(A22, half);
+
+
+    double *A11 = A;                   // Top-left block
+    double *A12 = A + half;            // Top-right block
+    double *A21 = A + half * n;        // Bottom-left block
+    double *A22 = A + half * n + half; // Bottom-right block
+
+    double *A11_inv = A_inv;           // Top-left block in inverse
+    double *A12_inv = A_inv + half;    // Top-right block in inverse
+    double *A21_inv = A_inv + half * n;// Bottom-left block in inverse
+    double *A22_inv = A_inv + half * n + half; // Bottom-right block in inverse
 */
     // Recursive call for A11_inv
-    schur_inverse(A11, A11_inv, half);
+    schur_inverse(A11, A11_inv, half, base_case_size);
   //  printf("A11_inv:\n");
   //  print_matrix(A11_inv, half);
 
@@ -86,7 +163,7 @@ void schur_inverse(double *A, double *A_inv, int n) {
   //  print_matrix(S, half);
 
     // Recursive call for S_inv
-    schur_inverse(S, S_inv, half);
+    schur_inverse(S, S_inv, half, base_case_size);
   //  printf("S_inv:\n");
   //  print_matrix(S_inv, half);
 
@@ -167,8 +244,19 @@ void schur_inverse(double *A, double *A_inv, int n) {
     free(A_inv22);
 }
 
-int main() {
-    int n = 2048;
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        printf("Usage: %s <matrix_size> <base_case_size>\n", argv[0]);
+        return 1;
+    }
+
+    int n = atoi(argv[1]);
+    int base_case_size = atoi(argv[2]);
+
+    if (n <= 0 || base_case_size <= 0) { // || n % base_case_size != 0) {
+        printf("Error: Ensure matrix_size > 0, base_case_size > 0, and matrix_size is divisible by base_case_size.\n");
+        return 1;
+    }
     double *A = (double *)malloc(n * n * sizeof(double));
     double *A_inv = (double *)malloc(n * n * sizeof(double));
     srand(0u);
@@ -176,14 +264,14 @@ int main() {
       for (int j = 0; j < n; j++)
         A[i*n+j] = ((double)rand()/RAND_MAX);
 
-    schur_inverse(A, A_inv, n);
+    schur_inverse(A, A_inv, n, base_case_size);
 //    print_matrix(A_inv, n);
     double sum = 0.0f;
     for (int i = 0; i < n; i++)
       for (int j = 0; j < n; j++)
         sum += A_inv[i * n + j];
 
-    printf("Checksum A:%1f", sum);
+    printf("Checksum A:%.8f \n", sum);
 
     return 0;
 }
