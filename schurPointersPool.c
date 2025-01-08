@@ -2,6 +2,45 @@
 #include <stdlib.h>
 #include <string.h>
 int N = 4;
+static double *g_pool = NULL;     // la memòria base
+static size_t  g_pool_size = 0;   // mida total (en doubles o bytes)
+static size_t  g_pool_offset = 0; // offset actual (índex)
+
+
+void* pool_alloc(size_t num_doubles)
+{
+    // Mirem si hi ha espai suficient
+    if (g_pool_offset + num_doubles > g_pool_size) {
+        fprintf(stderr, "pool_alloc: Out of memory pool!\n");
+        exit(EXIT_FAILURE);
+    }
+    void *ptr = &g_pool[g_pool_offset];
+    g_pool_offset += num_doubles;
+    return ptr;
+}
+
+// "pop" tipus stack (desfem l'última reserva)
+void pool_free(size_t num_doubles)
+{
+    // Assumim que alliberem exactament en ordre invers
+    g_pool_offset -= num_doubles;
+}
+
+size_t calculate_pool_size(int N, int base_case_size) {
+    size_t total_memory = 0;
+    int current_size = N;
+
+    while (current_size > base_case_size) {
+        // Cada nivell recursiu necessita memòria per a 5 matrius temporals
+        total_memory += 5 * (current_size / 2) * (current_size / 2);
+        current_size /= 2;
+    }
+
+    // Afegim una mica de memòria addicional per seguretat
+    total_memory += 10 * base_case_size * base_case_size;
+
+    return total_memory;
+}
 
 void print_matrix(double *A)
 {
@@ -173,29 +212,21 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
     double *A12_inv = A_inv + half;
     double *A21_inv = A_inv + ldInv * half;
     double *A22_inv = A_inv + ldInv * half + half;
-    /*
-        printf("A:\n");
-        print_matrix(A);
-        printf("A11:\n");
-        print_matrix_rec(A11, half);
-        printf("A12:\n");
-        print_matrix_rec(A12, half);
-        printf("A21:\n");
-        print_matrix_rec(A21, half);
-        printf("A22:\n");
-        print_matrix_rec(A22, half);
-        */
-    double *S = (double *)malloc(half * half * sizeof(double));
-    double *S_inv = (double *)malloc(half * half * sizeof(double));
-    double *A11_inv_temp = malloc(half * half * sizeof(double));
+
+    //size_t offset_inicial = g_pool_offset;
+    
+    double *S = (double*) pool_alloc(half * half);
+    double *S_inv = (double*) pool_alloc(half * half);
+    double *A11_inv_temp = (double*) pool_alloc(half * half);
+
     // Recursive call for A11_inv
     schur_inverse(A11, ldA, A11_inv_temp, half, half, base_case_size);
     // printf("A11inv:\n");
     // print_matrix_size(A11_inv_temp, half);
 
     // Compute Schur complement S = A22 - A21 * A11_inv * A12
-    double *temp1 = (double *)malloc(half * half * sizeof(double));
-    double *temp2 = (double *)malloc(half * half * sizeof(double));
+    double *temp1 = (double*) pool_alloc(half * half);
+    double *temp2 = (double*) pool_alloc(half * half);
 
     for (int i = 0; i < half; i++)
     {
@@ -236,12 +267,8 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
         }
     }
 
-    // printf("Schur Complement S:\n");
-    // print_matrix_size(S, half);
-
     // Recursive call for S_inv
     schur_inverse(S, half, S_inv, half, half, base_case_size);
-    free(S);
     // printf("S_inv:\n");
     // print_matrix_size(S_inv, half);
 
@@ -391,23 +418,15 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
             A22_inv[i * ldInv + j] = S_inv[i * half + j];
         }
     }
+    pool_free(half * half);  // temp2
+    pool_free(half * half);  // temp1
+    pool_free(half * half);  // A11_inv_temp
+    pool_free(half * half);  // S_inv
+    pool_free(half * half);  // S
 
-    // printf("A_inv22:\n");
-    // print_matrix_rec(A22_inv, half);
-    // print_matrix_rec(A_inv, ldInv);
-    // printf("free A11_inv_temp:\n");
-    free(A11_inv_temp);
-    // printf("free S:\n");
-    // free(S);
-    // printf("free S_inv:\n");
-    free(S_inv);
-    // printf("free temp1:\n");
-    free(temp1);
-    // printf("free temp2:\n");
-    free(temp2);
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char *argv[])   
 {
     if (argc != 3)
     {
@@ -418,13 +437,34 @@ int main(int argc, char *argv[])
     N = atoi(argv[1]);
     int base_case_size = atoi(argv[2]);
 
-    if (N <= 0 || base_case_size <= 0)
-    {
-        printf("Error: Ensure matrix_size > 0, base_case_size > 0, and matrix_size is divisible by base_case_size.\n");
+    if (N <= 0 || base_case_size <= 0) {
+        printf("Error: Ensure matrix_size > 0, base_case_size > 0.\n");
         return 1;
     }
+    size_t pool_size = calculate_pool_size(N, base_case_size);
+    printf("Calculated pool size: %zu doubles\n", pool_size);
+    g_pool_size = pool_size;
+    if (posix_memalign((void**)&g_pool, 64, g_pool_size * sizeof(double)) != 0) {
+        fprintf(stderr, "Error allocating aligned memory.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /*
+    if (posix_memalign((void**)&A, 64, N * N * sizeof(double)) != 0) {
+        fprintf(stderr, "Error allocating aligned memory for A.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (posix_memalign((void**)&A_inv, 64, N * N * sizeof(double)) != 0) {
+        fprintf(stderr, "Error allocating aligned memory for A_inv.\n");
+        free(A); // Alliberem la memòria de A si falla
+        exit(EXIT_FAILURE);
+    }
+*/
     double *A = (double *)malloc(N * N * sizeof(double));
     double *A_inv = (double *)malloc(N * N * sizeof(double));
+
+
     memset(A_inv, 0, N * N * sizeof(double));
     srand(0u);
     for (int i = 0; i < N; i++)
@@ -440,6 +480,7 @@ int main(int argc, char *argv[])
             sum += A_inv[i * N + j];
     free(A);
     free(A_inv);
+    free(g_pool);
     printf("Checksum A:%.8f \n", sum);
 
     return 0;

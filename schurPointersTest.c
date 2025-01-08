@@ -141,6 +141,7 @@ void GJElimination_stride(double *A, int ldA, double *A_inv, int n)
         }
     }
 }
+
 void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base_case_size)
 {
     if (n <= base_case_size)
@@ -173,98 +174,73 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
     double *A12_inv = A_inv + half;
     double *A21_inv = A_inv + ldInv * half;
     double *A22_inv = A_inv + ldInv * half + half;
-    /*
-        printf("A:\n");
-        print_matrix(A);
-        printf("A11:\n");
-        print_matrix_rec(A11, half);
-        printf("A12:\n");
-        print_matrix_rec(A12, half);
-        printf("A21:\n");
-        print_matrix_rec(A21, half);
-        printf("A22:\n");
-        print_matrix_rec(A22, half);
-        */
-    double *S = (double *)malloc(half * half * sizeof(double));
-    double *S_inv = (double *)malloc(half * half * sizeof(double));
+
     double *A11_inv_temp = malloc(half * half * sizeof(double));
     // Recursive call for A11_inv
     schur_inverse(A11, ldA, A11_inv_temp, half, half, base_case_size);
-    // printf("A11inv:\n");
-    // print_matrix_size(A11_inv_temp, half);
 
     // Compute Schur complement S = A22 - A21 * A11_inv * A12
     double *temp1 = (double *)malloc(half * half * sizeof(double));
-    double *temp2 = (double *)malloc(half * half * sizeof(double));
+    double *S_inv = (double *)malloc(half * half * sizeof(double));
+    double sum = 0.0; 
 
+    
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
         {
-            temp1[i * half + j] = 0.0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                // printf("A21[%d,%d] = %f\n", i, j, A21[i * ldA + j]);
-                // printf("A11_inv[%d,%d] = %f\n", k, j, A11_inv_temp[k * half + j]);
-                temp1[i * half + j] += A21[i * ldA + k] * A11_inv_temp[k * half + j];
+                sum += A21[i * ldA + k] * A11_inv_temp[k * half + j];
             }
+            temp1[i * half + j] = sum;
+
         }
     }
+
     // tmp1*A12 = temp2
+    //S_inv s utilitza com a matriu temporal aqui (estava amb temp2)
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
         {
-            temp2[i * half + j] = 0.0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                // printf("temp1[%d,%d] = %f\n", i, k, temp1[i * half + k]);
-                // printf("A12[%d,%d] = %f\n", k, j, A12[k * ldA + j]);
-                temp2[i * half + j] += temp1[i * half + k] * A12[k * ldA + j];
+                sum += temp1[i * half + k] * A12[k * ldA + j];
             }
+            S_inv[i * half + j] = sum;
         }
     }
     // S = A22 - temp2
+    //temp2 ara es s_inv 
+    //estalviem una matriu
+    double *S = (double *)malloc(half * half * sizeof(double));
+
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
         {
-            // printf("A22[%d,%d] = %f\n", i, j, A22[i * ldA + j]);
-            // printf("temp2[%d,%d] = %f\n", i, j, temp2[i * half + j]);
-
-            S[i * half + j] = A22[i * ldA + j] - temp2[i * half + j];
+            S[i * half + j] = A22[i * ldA + j] - S_inv[i * half + j];
         }
     }
-
-    // printf("Schur Complement S:\n");
-    // print_matrix_size(S, half);
 
     // Recursive call for S_inv
     schur_inverse(S, half, S_inv, half, half, base_case_size);
-    free(S);
-    // printf("S_inv:\n");
-    // print_matrix_size(S_inv, half);
 
     // A_inv11 = A11_inv + A11_inv * A12 * S_inv * A21 * A11_inv
-    // Ordre de les operacions:
-    // temp1 = A11_inv * A12
-    // temp2 = temp1 * S_inv
-    // temp1 = temp2 * A21
-    // A_inv11 = temp1 * A11_inv
-    // A_inv11 += A11_inv
 
-    // matmul(A11_inv, A12, temp1, half);
-    // A11_inv * A12 = temp1
-    // A11_inv tamany N, A12 tamany N, temp1 tamany half
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
         {
-            temp1[i * half + j] = 0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                temp1[i * half + j] += A11_inv_temp[i * half + k] * A12[k * ldA + j];
+                sum += A11_inv_temp[i * half + k] * A12[k * ldA + j];
             }
+            temp1[i*half+j] = sum;
         }
     }
 
@@ -272,11 +248,12 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
     {
         for (int j = 0; j < half; j++)
         {
-            temp2[i * half + j] = 0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                temp2[i * half + j] += temp1[i * half + k] * S_inv[k * half + j];
+                sum += temp1[i * half + k] * S_inv[k * half + j];
             }
+            S[i * half + j] = sum;
         }
     }
 
@@ -285,11 +262,12 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
     {
         for (int j = 0; j < half; j++)
         {
-            temp1[i * half + j] = 0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                temp1[i * half + j] += temp2[i * half + k] * A21[k * ldA + j];
+                sum += S[i * half + k] * A21[k * ldA + j];
             }
+            temp1[i * half + j] = sum;
         }
     }
 
@@ -297,73 +275,64 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
     {
         for (int j = 0; j < half; j++)
         {
-            temp2[i * half + j] = 0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                temp2[i * half + j] += temp1[i * half + k] * A11_inv_temp[k * half + j];
+                sum += temp1[i * half + k] * A11_inv_temp[k * half + j];
             }
+            S[i * half + j] = sum;
         }
     }
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
         {
-            A11_inv[i * ldInv + j] = A11_inv_temp[i * half + j] + temp2[i * half + j];
+            A11_inv[i * ldInv + j] = A11_inv_temp[i * half + j] + S[i * half + j];
         }
     }
-
-    // printf("A_inv11:\n");
-    // print_matrix_rec(A11_inv, half);
 
     // A12_inv = -A11_inv_temp * A12 * S_inv
-    // matmul(A11_inv, A12, temp1, half);
-
+    //temp1 = A11_inv * A12
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
         {
-            temp1[i * half + j] = 0.0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                temp1[i * half + j] += A11_inv_temp[i * half + k] * A12[k * ldA + j];
+                sum += A11_inv_temp[i * half + k] * A12[k * ldA + j];
             }
+            temp1[i * half + j] = sum;
         }
     }
+    
     // A12_inv = - temp1 * S_inv
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
         {
-            // Usem una variable local per acumular
-            double accum = 0.0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                // temp1 té stride = half
-                // S_inv té stride = half
-                accum += temp1[i * half + k] * S_inv[k * half + j];
+                sum += temp1[i * half + k] * S_inv[k * half + j];
             }
-            // Apliquem el signe negatiu
-            accum = -accum;
-
-            // Ara fem UN SOL store en A12_inv
-            // (incrustada a la matriu gran de dimensió N)
-            A12_inv[i * ldInv + j] = accum;
+            sum = -sum;
+            A12_inv[i * ldInv + j] = sum;
         }
     }
-    // printf("A12_inv:\n");
-    // print_matrix_rec(A12_inv, half);
 
     // A21_inv = -S_inv * A21 * A11_inv_temp
 
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
-        {
-            temp1[i * half + j] = 0.0;
+        {  
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                temp1[i * half + j] += S_inv[i * half + k] * A21[k * ldA + j];
+                sum += S_inv[i * half + k] * A21[k * ldA + j];
             }
+            temp1[i * half + j] = sum;
         }
     }
 
@@ -371,13 +340,13 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
     {
         for (int j = 0; j < half; j++)
         {
-            double accum = 0.0;
+            sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                accum += temp1[i * half + k] * A11_inv_temp[k * half + j];
+                sum += temp1[i * half + k] * A11_inv_temp[k * half + j];
             }
-            accum = -accum;
-            A21_inv[i * ldInv + j] = accum;
+            sum = -sum;
+            A21_inv[i * ldInv + j] = sum;
         }
     }
     // printf("A_inv21:\n");
@@ -392,19 +361,10 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
         }
     }
 
-    // printf("A_inv22:\n");
-    // print_matrix_rec(A22_inv, half);
-    // print_matrix_rec(A_inv, ldInv);
-    // printf("free A11_inv_temp:\n");
     free(A11_inv_temp);
-    // printf("free S:\n");
-    // free(S);
-    // printf("free S_inv:\n");
     free(S_inv);
-    // printf("free temp1:\n");
     free(temp1);
-    // printf("free temp2:\n");
-    free(temp2);
+    free(S);
 }
 
 int main(int argc, char *argv[])
