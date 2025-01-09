@@ -181,56 +181,17 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
 
     // Compute Schur complement S = A22 - A21 * A11_inv * A12
     double *temp1 = (double *)malloc(half * half * sizeof(double));
+    double *temp2 = (double *)malloc(half * half * sizeof(double)); // Guardara A11_inv_temp * A12
     double *S_inv = (double *)malloc(half * half * sizeof(double));
-    double sum = 0.0; 
-
-    
-    for (int i = 0; i < half; i++)
-    {
-        for (int j = 0; j < half; j++)
-        {
-            sum = 0.0;
-            for (int k = 0; k < half; k++)
-            {
-                sum += A21[i * ldA + k] * A11_inv_temp[k * half + j];
-            }
-            temp1[i * half + j] = sum;
-
-        }
-    }
-
-    // tmp1*A12 = temp2
-    //S_inv s utilitza com a matriu temporal aqui (estava amb temp2)
-    for (int i = 0; i < half; i++)
-    {
-        for (int j = 0; j < half; j++)
-        {
-            sum = 0.0;
-            for (int k = 0; k < half; k++)
-            {
-                sum += temp1[i * half + k] * A12[k * ldA + j];
-            }
-            S_inv[i * half + j] = sum;
-        }
-    }
-    // S = A22 - temp2
-    //temp2 ara es s_inv 
-    //estalviem una matriu
     double *S = (double *)malloc(half * half * sizeof(double));
 
-    for (int i = 0; i < half; i++)
-    {
-        for (int j = 0; j < half; j++)
-        {
-            S[i * half + j] = A22[i * ldA + j] - S_inv[i * half + j];
-        }
-    }
+    double sum = 0.0; 
+    //Canvi ordre d'operacions 
+    //temp2 = Farem primer A11_inv * A12
+    //temp1 = A21 * temp2
+    //S = A22-temp1
 
-    // Recursive call for S_inv
-    schur_inverse(S, half, S_inv, half, half, base_case_size);
-
-    // A_inv11 = A11_inv + A11_inv * A12 * S_inv * A21 * A11_inv
-
+    //temp2 = A11_inv*A12
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
@@ -240,10 +201,12 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
             {
                 sum += A11_inv_temp[i * half + k] * A12[k * ldA + j];
             }
-            temp1[i*half+j] = sum;
+            temp2[i * half + j] = sum;
+
         }
     }
 
+    //temp1 = A21 * temp2
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
@@ -251,9 +214,37 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
             sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                sum += temp1[i * half + k] * S_inv[k * half + j];
+                sum += A21[i * ldA + k] * temp2[k * half + j];
+            }
+            temp1[i * half + j] = sum;
+        }
+    }
+
+    for (int i = 0; i < half; i++)
+    {
+        for (int j = 0; j < half; j++)
+        {
+            S[i * half + j] = A22[i * ldA + j] - temp1[i * half + j];
+        }
+    }
+
+    // Recursive call for S_inv     
+    schur_inverse(S, half, S_inv, half, half, base_case_size);
+
+    // A_inv11 = A11_inv + A11_inv * A12 * S_inv * A21 * A11_inv
+    //A11_inv * A12 ja esta calculat, es temp2
+    //A12_inv = -A11_inv_temp * A12 * S_inv 
+    for (int i = 0; i < half; i++)
+    {
+        for (int j = 0; j < half; j++)
+        {
+            sum = 0.0;
+            for (int k = 0; k < half; k++)
+            {
+                sum += temp2[i * half + k] * S_inv[k * half + j];
             }
             S[i * half + j] = sum;
+            A12_inv[i * ldInv + j] = -1 * sum; //càlcul A12_inv incrustat
         }
     }
 
@@ -280,19 +271,22 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
             {
                 sum += temp1[i * half + k] * A11_inv_temp[k * half + j];
             }
-            S[i * half + j] = sum;
+            //S[i * half + j] = sum;
+            A11_inv[i * ldInv + j] = A11_inv_temp[i * half + j] + sum;
         }
     }
+    /*
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
         {
             A11_inv[i * ldInv + j] = A11_inv_temp[i * half + j] + S[i * half + j];
         }
-    }
-
-    // A12_inv = -A11_inv_temp * A12 * S_inv
-    //temp1 = A11_inv * A12
+    }*/
+    /*  A12_inv = -A11_inv_temp * A12 * S_inv */
+    /*  Reutilitzem calcul A11_inv_temp * A12 */
+    /*  A11_inv_temp * A12 és temp2*/
+/*
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
@@ -300,27 +294,13 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
             sum = 0.0;
             for (int k = 0; k < half; k++)
             {
-                sum += A11_inv_temp[i * half + k] * A12[k * ldA + j];
-            }
-            temp1[i * half + j] = sum;
-        }
-    }
-    
-    // A12_inv = - temp1 * S_inv
-    for (int i = 0; i < half; i++)
-    {
-        for (int j = 0; j < half; j++)
-        {
-            sum = 0.0;
-            for (int k = 0; k < half; k++)
-            {
-                sum += temp1[i * half + k] * S_inv[k * half + j];
+                sum += temp2[i * half + k] * S_inv[k * half + j];
             }
             sum = -sum;
             A12_inv[i * ldInv + j] = sum;
         }
     }
-
+*/
     // A21_inv = -S_inv * A21 * A11_inv_temp
 
     for (int i = 0; i < half; i++)
@@ -353,6 +333,7 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
     // print_matrix_rec(A21_inv, half);
 
     // A_inv22 = S_inv
+    
     for (int i = 0; i < half; i++)
     {
         for (int j = 0; j < half; j++)
@@ -364,6 +345,7 @@ void schur_inverse(double *A, int ldA, double *A_inv, int ldInv, int n, int base
     free(A11_inv_temp);
     free(S_inv);
     free(temp1);
+    free(temp2);
     free(S);
 }
 
